@@ -41,6 +41,20 @@ import random
 import deck
 import blackjack
 
+def format_table(table):
+    """Reformat a table as indexed by surrender_index for easy reading."""
+    upcard_sequence = table[2:11]
+    # Compose this so the ace is the last column:
+    upcard_sequence.append(table[1])
+
+    table = [["%.1f" % (y[False][x]/2.0) for y in upcard_sequence] for x in range(17, 11, -1)]
+    for x in range(17, 11, -1):
+        table[17-x].insert(0, x)
+
+    table.insert(0, ["+", 2,3,4,5,6,7,8,9,"X","A"])
+
+    return table
+
 TRIALS = int(sys.argv[1])
 output = open("results_for_spanish21_indices_%d_trials.txt" % TRIALS, "w")
 
@@ -152,6 +166,7 @@ hit_ev = [[[[[0 for x in range(21)] for softness in range(2)] for y in range(11)
 stay_ev = [[[[[0 for x in range(21)] for softness in range(2)] for y in range(11)] for z in range(COUNT_INDICES)] for w in range(7)]
 hand_ev = [[[[[0 for x in range(23)] for softness in range(2)] for y in range(11)] for z in range(COUNT_INDICES)] for w in range(8)]
 stay_index = [[[[None for x in range(21)] for softness in range(2)] for y in range(11)] for w in range(7)]
+surrender_index = [[[None for x in range(21)] for softness in range(2)] for y in range(11)]
 
 # Put the seven card charlies in the hand evs:
 for int_count in range(-COUNT_CAP, COUNT_CAP+1):
@@ -202,21 +217,18 @@ for cards_you_have in range(6, 1, -1):
 
                     if (not should_hit or int_count == COUNT_CAP) and stay_index[cards_you_have][upcard][is_soft][total] is None:
                         stay_index[cards_you_have][upcard][is_soft][total] = int_count;
+                    if ((curr_hand_ev < -0.5 or int_count == COUNT_CAP) and
+                            surrender_index[upcard][is_soft][total] is None and
+                            cards_you_have == 2):
+                        surrender_index[upcard][is_soft][total] = int_count;
 
-# Reformat stay_index list in a manner easy to view in a text table:
 for num_cards in range(2,7):
-    # Compose this so the ace is the last column:
-    upcard_sequence = stay_index[num_cards][2:11]
-    upcard_sequence.append(stay_index[num_cards][1])
-
-    table = [["%.1f" % (y[False][x]/2.0) for y in upcard_sequence] for x in range(17, 11, -1)]
-    for x in range(17, 11, -1):
-        table[17-x].insert(0, x)
-
-    table.insert(0, ["+", 2,3,4,5,6,7,8,9,"X","A"])
-
-    output.write("For %d cards:\n" % num_cards)
-    output.write(tabulate.tabulate(table))
+    output.write("Stay indices for %d cards:\n" % num_cards)
+    output.write(tabulate.tabulate(format_table(stay_index[num_cards])))
     output.write("\n")
+
+output.write("Surrender indices:\n")
+output.write(tabulate.tabulate(format_table(surrender_index)))
+output.write("\n")
 
 output.close()
