@@ -91,75 +91,9 @@ for int_count in range(COUNT_INDICES):
     for card in range(11):
         distros[int_count][card] /= float(TRIALS)
 
-# Indices: [count][upcard][is_soft][end_total]
-p_dealer_end = [[[[0.0 for end_total in range(23)] for softness in range(2)] for upcard in range(23)] for count in range(COUNT_INDICES)]
 # Indices: [count][upcard][end_total]
-dealer_distro = [[[0.0 for end_total in range(23)] for upcard in range(11)] for count in range(COUNT_INDICES)]
-
-# Calculate dealer ending card distro:
-# p( FINAL_DEALER_VALUE | CURRENT_DEALER_STATE and TRUE_COUNT )
-# I can use dynamic programming by inferrring:
-# p( FINAL_DEALER_VALUE | STATE ) = SUM( p( FINAL_DEALER_VALUE | NEXT_STATE )) * p(NEXT_STATE | STATE))
-
-# A DAG of the blackjack states:
-
-#HARD: 2 ->3 -> 4 ->  5 ->  6 ->  7 ->  8 ->  9 -> 10 -> 11 -> 12 -> 13 -> 14 -> 15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 21 -> BUST
-#               |     |     |     |     |     |     |          ^
-#               v     v     v     v     v     v     v          |
-#S: 12->13->14->15 -> 16 -> 17 -> 18 -> 19 -> 20 -> 21 --------+
-
-# Where any hard state under 11 can become the corresponding SOFT state
-# (eg, H10 -> S21) and any SOFT state can become a more advanced SOFT state or
-# wrapping around to start a hard state of at least 12.
-
-# The two exceptions are dealer starts with soft 11 or hard 10.  The next state
-# can never be 21 because the dealer will peek to make sure he doesn't have a
-# natural and the round won't play out.
-
-# So I calculate p(FINAL_DEALER_VALUE) in reverse topological sort order.
-for int_count in range(-COUNT_CAP, COUNT_CAP + 1):
-    for total, is_soft in blackjack.blackjack_states():
-        if (total, is_soft) in blackjack.H17_END_STATES:
-            p_dealer_end[int_count][total][is_soft][total] = 1.0
-            continue
-        for card in range(1,11):
-            next_total, next_soft = blackjack.next_state(total, is_soft, card)
-            for end_total in range(17, 23):
-                p_dealer_end[int_count][total][is_soft][end_total] += \
-                    (p_dealer_end[int_count][next_total][next_soft][end_total] *
-                    distros[int_count][card])
-
-# Since we only care about the probability distribution of the dealer's final
-# hand when the total is 1-10 (in other words, when we're only seeing the
-# upcard), we can truncate this list and compute upcard 1 and upcard 10 as
-# special cases:
-
-for int_count in range(-COUNT_CAP, COUNT_CAP + 1):
-    for upcard in range(2, 10):
-        dealer_distro[int_count][upcard] = p_dealer_end[int_count][upcard][False]
-
-    for end_total in range(17, 23):
-        # Account for Ace upcard.  Possible next hands are soft 12 through soft 20
-        for next_card in range(1,10):
-            dealer_distro[int_count][True][end_total] += \
-                (distros[int_count][next_card] *
-                p_dealer_end[int_count][next_card + 11][True][end_total])
-        # Bayes' theorem:
-        # p( card | card != 10 ) = p( card ) / p( card != 10 )
-        dealer_distro[int_count][True][end_total] /= 1 - distros[int_count][10]
-
-        # Account for ten upcard.  Possible next hands are hard 12 through 20
-        for next_card in range(2,11):
-            dealer_distro[int_count][10][end_total] += \
-                (distros[int_count][next_card] *
-                p_dealer_end[int_count][next_card + 10][False][end_total])
-
-        # Bayes' theorem:
-        # p( card | card != 1 ) = p( card ) / p( card != 1 )
-        dealer_distro[int_count][10][end_total] /= 1 - distros[int_count][True]
-
-# Now that we've calculated the probability of dealer going bust, let's calculate some deviation indices:
-charlie_bonus = [1,1,1.5,1,1,1.5,2,3]
+dealer_distro = [blackjack.get_dealer_terminal_distro_given_card_distro(distros[int_count]) for int_count in range(COUNT_INDICES)]
+charlie_bonus = [1,1,1.5,1,1,1.5,2,3] # Specific to Spanish 21.
 
 # Indices: [number_of_cards_you_already_have][true_count][dealer_upcard][is_soft][total]
 hit_ev = [[[[[0 for x in range(21)] for softness in range(2)] for y in range(11)] for z in range(COUNT_INDICES)] for w in range(7)]
